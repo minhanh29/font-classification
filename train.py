@@ -119,6 +119,8 @@ train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=Fals
 test_dataloader = DataLoader(test_dataset, batch_size=8, shuffle=False, collate_fn=custom_collate)
 
 loss_func = torch.nn.functional.binary_cross_entropy
+if not os.path.exists("./weights"):
+    os.makedirs("./weights")
 torch.save({
     "model": model.state_dict(),
     "optim": optimizer.state_dict(),
