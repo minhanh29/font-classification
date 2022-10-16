@@ -14,7 +14,7 @@ torch_blur = transforms.GaussianBlur((5, 5))
 torch_v_flip = transforms.RandomVerticalFlip(0.2)
 torch_h_flip = transforms.RandomHorizontalFlip(0.2)
 
-batch_size = 16
+batch_size = 1
 height = 64
 
 
@@ -99,27 +99,28 @@ FILE_TEXT = "./texts.txt"
 FONT_DIR = "./fonts/"
 FONT_FILE = "./fonts/font_list.txt"
 
-epochs = 30
+epochs = 2
 global_step = 0
 
-train_dataset = TextDataset(FILE_TEXT, FONT_DIR, FONT_FILE, train=True)
 test_dataset = TextDataset(FILE_TEXT, FONT_DIR, FONT_FILE, train=False)
 
 model = FontSiameseNet().to(device)
 for p in model.parameters():
     p.requires_grad = True
-optimizer = optim.Adam(model.parameters(), lr=0.0006)
-# checkpoint = torch.load("./weights/7400.pth", map_location="cpu")
-# model.load_state_dict(checkpoint['model'])
-# optimizer.load_state_dict(checkpoint['optim'])
-# global_step = checkpoint["global_step"]
 
-train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, collate_fn=custom_collate)
-test_dataloader = DataLoader(test_dataset, batch_size=8, shuffle=False, collate_fn=custom_collate)
+model_dir = "./weights"
+ckpt_list = os.listdir(model_dir)
+ckpt_list = [f for f in ckpt_list if ".pth" in f]
+ckpt_list.sort(key=lambda x: int(x.split(".")[0]))
+last_ckpt = ckpt_list[-1]
+print(last_ckpt)
 
-loss_func = torch.nn.functional.binary_cross_entropy
-if not os.path.exists("./weights"):
-    os.makedirs("./weights")
+checkpoint = torch.load(os.path.join(model_dir, last_ckpt), map_location="cpu")
+model.load_state_dict(checkpoint['model'])
+global_step = checkpoint["global_step"]
+
+test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, collate_fn=custom_collate)
+
 # torch.save({
 #     "model": model.state_dict(),
 #     "optim": optimizer.state_dict(),
@@ -128,46 +129,6 @@ if not os.path.exists("./weights"):
 accuracy = Accuracy(threshold=0.5)
 
 for epoch in range(epochs):
-    print("Training...")
-    model.train()
-    for p in model.parameters():
-        p.requires_grad = True
-    pbar = tqdm(train_dataloader)
-    pbar.set_description(f"Epoch {epoch}/{epochs}")
-    total_loss = 0.
-    total_acc = 0.
-    cnt = 0
-    for img1, img2, target in pbar:
-        global_step += 1
-        optimizer.zero_grad()
-        img1 = img1.float().to(device)
-        img2 = img2.float().to(device)
-        target = target.to(device)
-        target = torch.unsqueeze(target, dim=-1)
-        target_float = target.float()
-        pred = model.forward_pair(img1, img2)
-
-        # target = target.float()
-        loss = torch.nn.functional.binary_cross_entropy_with_logits(pred, target_float)
-        loss.backward()
-        optimizer.step()
-
-        acc = accuracy(pred.detach().cpu(), target.detach().cpu())
-        total_loss += loss.item()
-        total_acc += acc.numpy()
-        cnt += 1
-        pbar.set_postfix({
-            "loss": total_loss/cnt,
-            "accuracy": total_acc/cnt,
-        })
-
-        if cnt % 200 == 0:
-            torch.save({
-                "model": model.state_dict(),
-                "optim": optimizer.state_dict(),
-                "global_step": global_step,
-            }, os.path.join("./weights", f"{global_step}.pth"))
-
     print("Evaluating...")
     pbar = tqdm(test_dataloader)
     model.eval()
@@ -189,13 +150,8 @@ for epoch in range(epochs):
         cnt += 1
         pbar.set_postfix({
             "loss": loss.item(),
-            "accuracy": total_acc/cnt,
+            "accuracy": acc.numpy()
         })
 
     print("Eval loss:", total_loss/cnt)
-    torch.save({
-        "model": model.state_dict(),
-        "optim": optimizer.state_dict(),
-        "global_step": global_step,
-    }, os.path.join("./weights", f"{global_step}.pth"))
-
+    print("Eval acc:", total_acc/cnt)

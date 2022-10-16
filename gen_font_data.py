@@ -69,9 +69,11 @@ class TextDataset(Dataset):
         return img1, img2, target
 
     def get_from_label(self, label, font_path, idx):
-        text = random.choice(self.text_list)
+        img = None
         font_path = os.path.join(self.font_dir, font_path)
-        img = self.gen_data_sample(text, font_path, idx)
+        while img is None:
+            text = random.choice(self.text_list)
+            img = self.gen_data_sample(text, font_path, idx)
         img = img.float()/255.
 
         return img
@@ -83,6 +85,8 @@ class TextDataset(Dataset):
         draw.text(self.img_center, text, font=myFont, fill=(255, 255, 255), anchor="mm")
         rect = img.getbbox()
 
+        if rect is None:
+            return None
         canvas_width, canvas_height = (int(rect[2] - rect[0]), int(rect[3] - rect[1]))
         canvas_width += self.padding
         canvas_height += self.padding
